@@ -2,6 +2,7 @@
 import asyncio
 import requests
 import time
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -115,13 +116,15 @@ def cpuFullTask():
     def normal():
         res = 0
         for _ in range(2):
-            for i in range(10000000):
-                res += i + i ** 2 + i ** 3
+            for i in range(100):
+                # res += i + i ** 2 + i ** 3
+                res += np.dot(np.random.random((100,100)), np.random.random((100, 100)))
 
     async def asyjob(q):
         res = 0
-        for i in range(10000000):
-            res += i + i ** 2 + i ** 3
+        for i in range(100):
+            res += np.dot(np.random.random((100, 100)), np.random.random((100, 100)))
+            # res += i + i ** 2 + i ** 3
         q.append(res)  # queue
 
     def coroutine():
@@ -139,6 +142,50 @@ def cpuFullTask():
     st3 = time.time()
     print("coroutine is %.4f" % (st3 - st2))
 
+def gpuFullTask():
+    """
+
+    :return:
+    """
+    import tensorflow as tf
+
+    def normal():
+        a = tf.placeholder(dtype=tf.float32)
+        b = tf.matmul(a, tf.transpose(a))
+
+        with tf.Session() as sess:
+            res = 0
+            sess.run(tf.global_variables_initializer())
+            for _ in range(200):
+                res += b.eval(session=sess, feed_dict={a:np.random.random((1000,100))})
+
+    async def asyjob(q, a, b, sess):
+        res = 0
+        for _ in range(100):
+            res += b.eval(session=sess, feed_dict={a: np.random.random((1000, 100))})
+        q.append(res)
+
+    def coroutine():
+        q = []
+        a = tf.placeholder(dtype=tf.float32)
+        b = tf.matmul(a, tf.transpose(a))
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.global_variables_initializer())
+            futures = [asyjob(q, a, b, sess) for _ in range(2)]
+
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.wait(futures))
+
+    st = time.time()
+    normal()
+    st2 = time.time()
+    print("normal is %.4f" % (st2 - st))
+    coroutine()
+    st3 = time.time()
+    print("coroutine is %.4f" % (st3 - st2))
+
 
 if __name__ == '__main__':
-    cpuFullTask()
+    # cpuFullTask()
+    gpuFullTask()
