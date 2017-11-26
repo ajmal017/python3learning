@@ -1,7 +1,7 @@
 
 import asyncio
-import threading
 import requests
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -104,6 +104,41 @@ def sameTask():
 
 
 
+def cpuFullTask():
+    """
+        Test whether it will speed up cpu full task in coroutine
+        The answer is NO.
+        coroutine is best suitable for i/o tasks
+    :return:
+    """
+
+    def normal():
+        res = 0
+        for _ in range(2):
+            for i in range(10000000):
+                res += i + i ** 2 + i ** 3
+
+    async def asyjob(q):
+        res = 0
+        for i in range(10000000):
+            res += i + i ** 2 + i ** 3
+        q.append(res)  # queue
+
+    def coroutine():
+        q = []
+        futures = [asyjob(q) for _ in range(2)]
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.wait(futures))
+
+    st = time.time()
+    normal()
+    st2 = time.time()
+    print("normal is %.4f" % (st2-st))
+    coroutine()
+    st3 = time.time()
+    print("coroutine is %.4f" % (st3 - st2))
+
 
 if __name__ == '__main__':
-    sameTask()
+    cpuFullTask()
