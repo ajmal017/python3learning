@@ -3,8 +3,9 @@ import asyncio
 import requests
 import time
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
-
+import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from util.timer import timer
 
 def tailf():
     """
@@ -94,16 +95,34 @@ def sameTask():
         return asyncio.gather(*[loop.run_in_executor(executor, requests.get, url)
                                 for url in urls])
 
+    def normal_fetch(urls):
+        return [requests.get(url) for url in urls]
+
     loop = asyncio.get_event_loop()
-    executor = ThreadPoolExecutor(max_workers=3)
+    executor = ThreadPoolExecutor(max_workers=8)
 
-    result = loop.run_until_complete(fetch_urls(['http://www.baidu.com',
-                                            'http://www.taobao.com',
-                                            'http://www.weibo.com',
-                                                 'http://www.163.com']))
-    print(result)
+    urls = ['http://www.baidu.com',
+            'http://www.taobao.com',
+            'http://www.weibo.com',
+            'http://www.163.com']
+    urls *= 10
+
+    st = time.time()
+    result = loop.run_until_complete(fetch_urls(urls))
+    st2 = time.time()
+    print("asyncio is %.4f" % (st2 - st))
+    normal_fetch(urls)
+    st2 = time.time()
+    print("normal is %.4f" % (st2 - st))
 
 
+######################################################
+
+def smalljob():
+    res = 0
+    for i in range(1000):
+        res += np.dot(np.random.random((100, 100)), np.random.random((100, 100)))
+    return res
 
 def cpuFullTask():
     """
@@ -113,34 +132,51 @@ def cpuFullTask():
     :return:
     """
 
+    @timer
     def normal():
         res = 0
         for _ in range(2):
-            for i in range(100):
+            for i in range(1000):
                 # res += i + i ** 2 + i ** 3
                 res += np.dot(np.random.random((100,100)), np.random.random((100, 100)))
 
+    def job(q):
+        res = 0
+        for i in range(1000):
+            res += np.dot(np.random.random((100, 100)), np.random.random((100, 100)))
+        q.append(res)
+
+
+
     async def asyjob(q):
         res = 0
-        for i in range(100):
+        for i in range(1000):
             res += np.dot(np.random.random((100, 100)), np.random.random((100, 100)))
             # res += i + i ** 2 + i ** 3
         q.append(res)  # queue
 
+    @timer
     def coroutine():
         q = []
-        futures = [asyjob(q) for _ in range(2)]
-
         loop = asyncio.get_event_loop()
+        executor = ProcessPoolExecutor(max_workers=2)
+        futures = [loop.run_in_executor(executor, smalljob) for _ in range(2)]
         loop.run_until_complete(asyncio.wait(futures))
 
-    st = time.time()
+    @timer
+    def multicore():
+        q = []
+        p1 = mp.Process(target=job, args=(q,))
+        p2 = mp.Process(target=job, args=(q,))
+        p1.start()
+        p2.start()
+        p1.join()
+        p2.join()
+
+
     normal()
-    st2 = time.time()
-    print("normal is %.4f" % (st2-st))
     coroutine()
-    st3 = time.time()
-    print("coroutine is %.4f" % (st3 - st2))
+    multicore()
 
 def gpuFullTask():
     """
@@ -149,6 +185,7 @@ def gpuFullTask():
     """
     import tensorflow as tf
 
+    @timer
     def normal():
         a = tf.placeholder(dtype=tf.float32)
         b = tf.matmul(a, tf.transpose(a))
@@ -165,6 +202,7 @@ def gpuFullTask():
             res += b.eval(session=sess, feed_dict={a: np.random.random((1000, 100))})
         q.append(res)
 
+    @timer
     def coroutine():
         q = []
         a = tf.placeholder(dtype=tf.float32)
@@ -177,15 +215,10 @@ def gpuFullTask():
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.wait(futures))
 
-    st = time.time()
     normal()
-    st2 = time.time()
-    print("normal is %.4f" % (st2 - st))
     coroutine()
-    st3 = time.time()
-    print("coroutine is %.4f" % (st3 - st2))
 
 
 if __name__ == '__main__':
-    # cpuFullTask()
-    gpuFullTask()
+    cpuFullTask()
+    # sameTask()
