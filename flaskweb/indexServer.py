@@ -1,17 +1,17 @@
 
 from flask import Flask
-from flask.ext import restful
+import flask_restful
 
 app = Flask(__name__)
-api = restful.Api(app)
+api = flask_restful.Api(app)
 
 COUNT = 0
 
-class HelloWorld(restful.Resource):
+class HelloWorld(flask_restful.Resource):
     def get(self):
         return {'hello': 'world'}
 
-class GetIndex(restful.Resource):
+class GetIndex(flask_restful.Resource):
     def get(self):
         global COUNT
         if COUNT % 2 == 1:

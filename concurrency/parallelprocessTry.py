@@ -4,15 +4,20 @@ import asyncio
 import requests
 import numpy as np
 import aiohttp
+import util.log
 from util.timer import timer
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import JoinableQueue
 
 
 urls = ['http://www.baidu.com',
             'http://www.taobao.com',
             'http://www.weibo.com',
             'http://www.163.com']
+
+logger = util.log.logging.getLogger(__name__)
+
 
 @timer
 def multiProcessTask():
@@ -101,7 +106,29 @@ def normal():
     for i in range(20):
         results = [requests.get(url) for url in urls]
 
+################### Joinablequeue test
+def processwait():
+    import time
+    logger.info(" process sleep start")
+    time.sleep(10)
+    logger.info(" process sleep end")
+
+def JoinqueueTest():
+    queue = JoinableQueue()
+    done = False
+
+    p = multiprocessing.Process(target=processwait)
+    p.start()
+    while not done:
+        msg = queue.get(block=True)
+        logger.info("Got msg: {0}".format(msg))
+        if msg is None:
+            logger.info("Terminating PS")
+            done = True
+        queue.task_done()
+
 if __name__ == '__main__':
-    asyncSemaphore()
-    asyncSemaphoreWithThreadPool()
-    normal()
+    # asyncSemaphore()
+    # asyncSemaphoreWithThreadPool()
+    # normal()
+    JoinqueueTest()
