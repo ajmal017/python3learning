@@ -1,11 +1,13 @@
 
 import random
 import json
+import os
 from flask import Flask, url_for, request
 from flask import render_template
-
+from flaskweb.thirdparty.agent import SelfPlayAgent
 
 app = Flask(__name__)
+
 
 @app.route('/hello/<name>')
 def hello(name=None):
@@ -17,11 +19,8 @@ def go():
 
 @app.route('/nextMove/', methods=['GET'])
 def netmove():
-    x = request.args.get('x', type=int)
-    y = request.args.get('y', type=int)
-    # print(request.args.get('x'))
-    return json.dumps({'row': random.randint(0, 19), 'col': random.randint(0, 19)})
-
+    isEnd, x, y = SelfPlayAgent().getMove()
+    return json.dumps({'isEnd':isEnd, 'row': x, 'col': y})
 
 if __name__ == '__main__':
     app.run(debug=True)
