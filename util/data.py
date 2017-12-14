@@ -32,6 +32,7 @@ def getMnist():
     root = getRootDir()
     dataX = np.loadtxt(os.path.join(root, 'resource/digitInput.txt'))
     dataY = np.loadtxt(os.path.join(root, 'resource/digitOutput.txt'))
+
     return dataX, dataY
 
 if __name__ == '__main__':
