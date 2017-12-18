@@ -10,7 +10,7 @@ class Singleton(object):
             cls._instance = super(Singleton, cls).__new__(cls, *args, **kwargs)
         return cls._instance
 
-class SelfPlayAgent(Singleton):
+class SelfPlayAgent():
     def __init__(self):
 
         hps = HPS
@@ -19,7 +19,7 @@ class SelfPlayAgent(Singleton):
         flags.n_batch = None
         flags.n_epoch = 1
         flags.selfplay_games_per_epoch = 1
-        flags.num_playouts = 1
+        flags.num_playouts = 1000
         flags.load_model_path = os.path.join("/Users/kyoka/Documents/coding/pycharm_workplace/python3learning/flaskweb/thirdparty/",
                                              "savedmodels/large20")
 

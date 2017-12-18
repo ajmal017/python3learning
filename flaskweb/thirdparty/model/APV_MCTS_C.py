@@ -133,6 +133,8 @@ class MCTSPlayerMixin(object):
         """Async tree search controller"""
         start = time.time()
 
+        # self.loop = asyncio.get_event_loop()
+
         key = self.counter_key(position)
 
         if not self.is_expanded(key):

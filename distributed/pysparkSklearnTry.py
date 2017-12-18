@@ -1,9 +1,15 @@
 
 import numpy as np
+import pyspark
+import sklearn
 from sklearn import linear_model
 from pyspark import SparkConf, SparkContext
 from util.data import getMnist
 from distributed.pysparkTry import getLogger
+from pyspark.sql.functions import udf
+from pyspark.ml.param import Param, Params
+from pyspark.ml.linalg import Vectors, Matrices, MatrixUDT
+from spark_sklearn.util import createLocalSparkSession
 
 class Base():
     def _fit(self, x):
@@ -80,6 +86,45 @@ class RDDLRSklModel(object):
 
 
 
+class SKLModel(pyspark.ml.Estimator):
+    """
+        fit spark dataframe as input
+    """
+    def __init__(self, sklearnEstimator=None, keyCols=["key"], xCol="features",
+                 outputCol="output", yCol=None, estimatorType=None):
+        if sklearnEstimator is None:
+            raise ValueError("sklearnEstimator should be specified")
+        if not isinstance(sklearnEstimator, sklearn.base.BaseEstimator):
+            raise ValueError("sklearnEstimator should be an sklearn.base.BaseEstimator")
+        # if len(keyCols) == 0:
+        #     raise ValueError("keyCols should not be empty")
+        if "estimator" in keyCols + [xCol, yCol]:
+            raise ValueError("keyCols should not contain a column named \"estimator\"")
+
+        # The superclass expects Param attributes to already be set, so we only init it after
+        # doing so.
+        for paramName, paramSpec in SKLModel._paramSpecs.items():
+            setattr(self, paramName, Param(Params._dummy(), paramName, paramSpec["doc"]))
+        super(SKLModel, self).__init__()
+        self._setDefault(**{paramName: paramSpec["default"]
+                            for paramName, paramSpec in SKLModel._paramSpecs.items()
+                            if "default" in paramSpec})
+        kwargs = SKLModel._inferredParams(sklearnEstimator, self._input_kwargs)
+        self._set(**kwargs)
+
+        self._verifyEstimatorType()
+
+    @staticmethod
+    def _inferredParams(estimator, inputParams):
+        if "estimatorType" in inputParams:
+            return inputParams
+        if "yCol" in inputParams:
+            inputParams["estimatorType"] = "predictor"
+        elif hasattr(estimator, "fit_predict"):
+            inputParams["estimatorType"] = "clusterer"
+        else:
+            inputParams["estimatorType"] = "transformer"
+        return inputParams
 
 def main():
     """
@@ -134,5 +179,38 @@ def simpleLR():
     pred = model.predict(dataX)
     print(np.sum(pred == dataY))
 
+
+def udfTest():
+    # conf = SparkConf().setAppName("test").setMaster("local[2]") \
+    #     .set("spark.shuffle.service.enabled", "false").set("spark.dynamicAllocation.enabled", "false")
+    #
+    # sc = SparkContext(conf=conf)
+    spark = createLocalSparkSession()
+    dataX, dataY = getMnist()
+
+    def sklmodelPredict(model):
+        def f(vec):
+            p = model.predict(np.array(vec.values.data).reshape(1, -1))
+            return int(p)
+        return f
+
+
+
+    df = spark.createDataFrame([(user,
+                                 Vectors.dense([i, i ** 2, i ** 3]),
+                                0.0 + user + i + 2 * i ** 2 + 3 * i ** 3)
+                                for user in range(3) for i in range(5)])
+    df = df.toDF("key", "features", "y")
+    pd = df.select('features', 'y').toPandas()
+    dataX = np.vstack(pd['features'].apply(lambda v: v.toArray()))
+    dataY = pd['y'].values.reshape(-1, 1)
+    model = linear_model.LinearRegression()
+    model.fit(dataX, dataY)
+
+    ufun = udf(sklmodelPredict(model))
+
+    df.withColumn("pred", ufun("features")).show()
+
+
 if __name__ == '__main__':
-    simpleLR()
+    udfTest()

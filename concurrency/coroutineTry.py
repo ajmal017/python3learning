@@ -75,6 +75,7 @@ def differentTask():
         print("computing x + y")
         await asyncio.sleep(1)
         print("result is %s" % (x + y))
+        return x + y
 
     async def printer(msg):
         print(msg)
@@ -82,8 +83,10 @@ def differentTask():
     def coroutineParralel():
         task = [compute(1, 2), printer("hello world"), ]
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(asyncio.wait(task))
+        results = loop.run_until_complete(asyncio.gather(*task))
+        print(results)
 
+    coroutineParralel()
 
 def sameTask():
     """
@@ -220,5 +223,5 @@ def gpuFullTask():
 
 
 if __name__ == '__main__':
-    cpuFullTask()
+    differentTask()
     # sameTask()

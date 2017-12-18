@@ -5,10 +5,13 @@ import requests
 import numpy as np
 import aiohttp
 import util.log
+import time
+
 from util.timer import timer
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import JoinableQueue
+from multiprocessing.managers import BaseManager
 
 
 urls = ['http://www.baidu.com',
@@ -107,8 +110,8 @@ def normal():
         results = [requests.get(url) for url in urls]
 
 ################### Joinablequeue test
-def processwait():
-    import time
+def processwait(mgrlist, i):
+    mgrlist.append(i)
     logger.info(" process sleep start")
     time.sleep(10)
     logger.info(" process sleep end")
@@ -127,8 +130,23 @@ def JoinqueueTest():
             done = True
         queue.task_done()
 
+
+
+
+def managerTest():
+    mgr = multiprocessing.Manager()
+    mgrlist = mgr.list()
+    for i in range(20):
+        if len(mgrlist) < 10:
+            p = multiprocessing.Process(target=processwait, args=(mgrlist, i))
+            p.start()
+        else:
+            pass
+    logger.info("mgr shutdown end")
+    time.sleep(10)
+
 if __name__ == '__main__':
     # asyncSemaphore()
     # asyncSemaphoreWithThreadPool()
     # normal()
-    JoinqueueTest()
+    managerTest()

@@ -24,7 +24,7 @@ def getRootDir():
     items = wkDir.split(sep)
     for i, item in enumerate(reversed(items)):
         if item == "python3learning":
-            rootDir = sep.join(items[:-i])
+            rootDir = sep.join(items[:len(items)-i])
 
     return rootDir
 
