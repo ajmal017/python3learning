@@ -26,6 +26,11 @@ class Impl(Base, Test):
 
 
 def map(getLogger):
+    """
+        For spark rdd
+    :param getLogger:
+    :return:
+    """
     def f(m):
         logger = getLogger()
         data = []

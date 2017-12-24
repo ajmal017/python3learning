@@ -62,8 +62,12 @@ def lrmodel(x, label):
     IMAGE_PIXELS = 20
     hidden_units = 200
     # Variables of the hidden layer
-    hid_w = tf.Variable(tf.truncated_normal([IMAGE_PIXELS * IMAGE_PIXELS, hidden_units],
-                                            stddev=1.0 / IMAGE_PIXELS), name="hid_w")
+    # hid_w = tf.Variable(tf.truncated_normal([IMAGE_PIXELS * IMAGE_PIXELS, hidden_units],
+    #                                         stddev=1.0 / IMAGE_PIXELS), name="hid_w")
+
+    hid_w = tf.get_variable("hid_w", shape=[IMAGE_PIXELS * IMAGE_PIXELS, hidden_units],
+                            initializer=tf.truncated_normal_initializer)
+
     hid_b = tf.Variable(tf.zeros([hidden_units]), name="hid_b")
     tf.summary.histogram("hidden_weights", hid_w)
 
@@ -72,18 +76,20 @@ def lrmodel(x, label):
                                            stddev=1.0 / math.sqrt(hidden_units)), name="sm_w")
     sm_b = tf.Variable(tf.zeros([10]), name="sm_b")
 
-    hid_lin = tf.nn.xw_plus_b(x, hid_w, hid_b)
-    hid = tf.nn.relu(hid_lin)
+    hid_lin = tf.nn.xw_plus_b(x, hid_w, hid_b, name="hid_lin")
+    hid = tf.nn.relu(hid_lin, name="hid")
 
-    y = tf.nn.softmax(tf.nn.xw_plus_b(hid, sm_w, sm_b))
 
-    loss = -tf.reduce_sum(label * tf.log(tf.clip_by_value(y, 1e-10, 1.0)))
+    logits = tf.nn.xw_plus_b(hid, sm_w, sm_b, name="logits")
+    pred = tf.nn.softmax(logits, name="pred")
 
-    globalStep = tf.Variable(0, name="global_step", trainable=False)
+    # loss = -tf.reduce_sum(label * tf.log(tf.clip_by_value(pred, 1e-10, 1.0)), name="loss")
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=logits), name="loss")
 
+    globalStep = tf.Variable(0, name="globalStep", trainable=False)
 
     opt = tf.train.AdamOptimizer(0.001)
-    return y, loss, globalStep, opt
+    return pred, loss, globalStep, opt
 
 
 
@@ -134,6 +140,11 @@ def tff(model, getClusterAndServer, getlogger):
 
 
         init_op = tf.global_variables_initializer()
+        sess_config = tf.ConfigProto(
+            allow_soft_placement=True,
+            log_device_placement=False,
+            device_filters=["/job:ps", "/job:worker/task:%d" % index])
+
         sv = tf.train.Supervisor(is_chief=(index == 0),
                                  init_op=init_op,
                                  summary_op=None,
@@ -141,7 +152,9 @@ def tff(model, getClusterAndServer, getlogger):
                                  stop_grace_secs=300,
                                  global_step=globalStep)
 
-        with sv.managed_session(server.target) as sess:
+        # with sv.managed_session(server.target) as sess:
+        with sv.prepare_or_wait_for_session(server.target,
+                                            config=sess_config) as sess:
 
             # wait for parameter server variables to be initialized
             while (len(sess.run(uninitedOp)) > 0):
@@ -152,6 +165,9 @@ def tff(model, getClusterAndServer, getlogger):
             for i in range(100):
                 _, l, step = sess.run([trainOp, loss, globalStep], feed_dict={x: dataX, label: dataY})
                 logger.info("workder index %s, iter %s, loss is %s, global step is %s" % (index, i, l, step))
+
+            while globalStep.eval() < 200-1:
+                time.sleep(1e-1)
 
             for op in enqueueOps:
                 sess.run(op)
@@ -293,7 +309,7 @@ def tff(model, getClusterAndServer, getlogger):
 
         runWorker(index, dataX, dataY, logger)
 
-    return fSyn
+    return f
 
 
 def main():
