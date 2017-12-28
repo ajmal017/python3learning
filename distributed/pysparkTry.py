@@ -1,4 +1,5 @@
 
+import socket
 import logging
 import numpy as np
 import tensorflow as tf
@@ -11,8 +12,11 @@ import multiprocessing
 import datetime
 import math
 from pyspark import SparkContext, SparkConf
-from pyspark.sql import SparkSession
-from util.data import getMnist
+from pyspark.sql import SparkSession, Row
+from pyspark.sql.types import LongType
+from util.data import getMnist, getDatasetMinist
+from spark_sklearn.util import createLocalSparkSession
+
 
 
 def getLogger():
@@ -26,7 +30,25 @@ def getLogger():
     return logging.getLogger(__name__)
 
 
-def getClusterAndServer(jobName, taskIndex):
+def isPortAvaliable(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    res = sock.connect_ex((host, port))
+    if res == 0:
+        sock.close()
+        return False
+    return True
+
+def createPort():
+    """
+
+    :return:
+    """
+    basePort = random.randint(3000, 4000)
+    while not isPortAvaliable("localhost", basePort):
+        print("port %s is not available" % basePort)
+    return basePort
+
+def getClusterAndServer():
     """
         The spec is fix for this demo,
         It's need to design a spec provider
@@ -34,22 +56,33 @@ def getClusterAndServer(jobName, taskIndex):
     :param taskIndex:
     :return:
     """
-    cluster_spec = {
-    "worker": [
-        "localhost:3222",
-        "localhost:3223",
-    ],
-    "ps": [
-        "localhost:3224",
-        "localhost:3225"
-    ]}
-    # Create a cluster from the parameter server and worker hosts.
-    cluster = tf.train.ClusterSpec(cluster_spec)
 
-    # Create and start a server for the local task.
-    server = tf.train.Server(cluster, jobName, taskIndex)
+    # ports = []
+    # for _ in range(4):
+    #     port = createPort()
+    #     if port not in ports:
+    #         ports.append(port)
+    # print("prots ars %s"%str(ports))
+    ports = ["3222","3223","3224","3225"]
 
-    return cluster, server
+    def f(jobName, taskIndex):
+        cluster_spec = {
+            "worker": [
+                "localhost:%s" % ports[0],
+                "localhost:%s" % ports[1],
+            ],
+            "ps": [
+                "localhost:%s" % ports[2],
+                "localhost:%s" % ports[3]
+            ]}
+        # Create a cluster from the parameter server and worker hosts.
+        cluster = tf.train.ClusterSpec(cluster_spec)
+
+        # Create and start a server for the local task.
+        server = tf.train.Server(cluster, jobName, taskIndex)
+
+        return cluster, server
+    return f
 
 
 def lrmodel(x, label):
@@ -86,8 +119,7 @@ def lrmodel(x, label):
     # loss = -tf.reduce_sum(label * tf.log(tf.clip_by_value(pred, 1e-10, 1.0)), name="loss")
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=logits), name="loss")
 
-    globalStep = tf.Variable(0, name="globalStep", trainable=False)
-
+    globalStep = tf.contrib.framework.get_or_create_global_step()
     opt = tf.train.AdamOptimizer(0.001)
     return pred, loss, globalStep, opt
 
@@ -343,7 +375,18 @@ def main():
     print("_________ end _________")
 
 
+def dfTry():
+    spark = createLocalSparkSession()
+    df = getDatasetMinist(spark)
+
+    rdd1 = spark.sparkContext.parallelize(np.arange(5000).tolist())
+
+    rdd2 = df.rdd.zip(rdd1).map(lambda d_r: d_r[0]+Row(pred=d_r[1]))
+
+    df2 = df.sql_ctx.createDataFrame(rdd2, df.schema.add("pred", LongType()))
+    df2.show()
+
 if __name__ == '__main__':
-    main()
+    dfTry()
     # cluster, server = getClusterAndServer("worker", 1)
     # print(cluster.num_tasks("worker"))

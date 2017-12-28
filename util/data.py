@@ -1,6 +1,7 @@
 
 import numpy as np
 import os
+from pyspark.ml.linalg import Vectors
 
 def getSeparator():
     '''
@@ -34,6 +35,26 @@ def getMnist():
     dataY = np.loadtxt(os.path.join(root, 'resource/digitOutput.txt'))
 
     return dataX, dataY
+
+
+
+def getDatasetMinist(spark):
+    dataX, dataY = getMnist()
+    dataY = np.argmax(dataY, axis=1)
+
+    index = np.arange(dataX.shape[0])
+    np.random.shuffle(index)
+    dataX = dataX[index]
+    dataY = dataY[index]
+
+    # Vectors.dense([1,2,3]).array
+
+    df = spark.createDataFrame([(Vectors.dense(x.tolist()), int(y))
+                                for x, y in zip(dataX, dataY)
+                                ])
+    df = df.toDF("features", "label")
+    return df
+
 
 if __name__ == '__main__':
     dataX, dataY = getMnist()

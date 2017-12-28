@@ -54,7 +54,8 @@ class DisLRModel(BaseEstimator):
         """
         graph_def = graph.as_graph_def()
         graph_def.ParseFromString(self.bytes)
-
+        # for n in graph_def.node:
+        #     print(n.name)
         # The name var will prefix every op/nodes in your graph
         # Since we load everything in a new graph, this is not needed
         tf.train.import_meta_graph(self.exmg)
@@ -72,7 +73,8 @@ class DisLRModel(BaseEstimator):
         learningRate = graph.get_tensor_by_name('lrmodel/lr:0')
         pred = graph.get_tensor_by_name('lrmodel/pred:0')
         loss = graph.get_tensor_by_name('lrmodel/loss:0')
-        globalStep = graph.get_tensor_by_name('lrmodel/globalStep:0')
+        # globalStep = graph.get_tensor_by_name('lrmodel/globalStep:0')
+        globalStep = tf.contrib.framework.get_or_create_global_step()
         trainOp = graph.get_operation_by_name('lrmodel/trainOp')
         if recover:
             graph_def = graph.as_graph_def()
@@ -104,11 +106,11 @@ class DisLRModel(BaseEstimator):
             with tf.Graph().as_default() as graph:
                 if self.exmg is None or self.bytes is None:
                     self.createGraph()
-                    input, label, learningRate, pred, loss, trainOp, inits = self.getOpFromGraph(graph, recover=False)
+                    input, label, learningRate, pred, loss, globalStep, trainOp, inits = self.getOpFromGraph(graph, recover=False)
                 else:
                     print("recovering graph")
                     self.recoverGraph(graph)
-                    input, label, learningRate, pred, loss, trainOp, inits = self.getOpFromGraph(graph, recover=True)
+                    input, label, learningRate, pred, loss, globalStep, trainOp, inits = self.getOpFromGraph(graph, recover=True)
 
                 with tf.Session() as sess:
                     sess.run(inits)
@@ -123,7 +125,7 @@ class DisLRModel(BaseEstimator):
         with tf.Graph().as_default() as graph:
             print("recovering graph")
             self.recoverGraph(graph)
-            input, label, learningRate, pred, loss, trainOp, inits = self.getOpFromGraph(graph, recover=True)
+            input, label, learningRate, pred, loss, globalStep, trainOp, inits = self.getOpFromGraph(graph, recover=True)
             with tf.Session() as sess:
                 sess.run(inits)
                 p = pred.eval(session=sess, feed_dict={input: dataX})
