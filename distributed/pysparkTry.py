@@ -1,4 +1,4 @@
-
+#-*- coding:utf-8 -*-#
 import socket
 import logging
 import numpy as np
@@ -14,8 +14,10 @@ import math
 from pyspark import SparkContext, SparkConf
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.types import LongType
+from pyspark.ml.classification import DecisionTreeClassifier, DecisionTreeClassificationModel
 from util.data import getMnist, getDatasetMinist
 from spark_sklearn.util import createLocalSparkSession
+from sklearn.preprocessing import LabelEncoder
 
 
 
@@ -386,7 +388,32 @@ def dfTry():
     df2 = df.sql_ctx.createDataFrame(rdd2, df.schema.add("pred", LongType()))
     df2.show()
 
+
+def gbtr():
+    spark = createLocalSparkSession()
+    df = getDatasetMinist(spark)
+    # DecisionTreeClassifier.le = LabelEncoder()
+    clf = DecisionTreeClassifier()
+    model = clf.fit(df)
+    model.write().overwrite().save('file:///data/mapleleaf/work/algorithm/model/DecisionTreeClassifier_node_DecisionTreeClassifier_76017b.None/model')
+
+def load():
+    spark = createLocalSparkSession()
+    obj = DecisionTreeClassificationModel.load('tmp')
+    # print(obj.le)
+
+
+    # unzip_file(zipf, '/tmp/model/', True)
+
+def read_zip():
+    zipf = '/tmp/model/tmp.zip'
+    with open(zipf, 'rb') as f:
+        b_text = f.read()
+
+    with open('/tmp/model/tmp2.zip', 'wb') as w:
+        w.write(b_text)
+
 if __name__ == '__main__':
-    dfTry()
+    pass
     # cluster, server = getClusterAndServer("worker", 1)
     # print(cluster.num_tasks("worker"))

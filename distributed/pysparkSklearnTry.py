@@ -4,12 +4,15 @@ import pyspark
 import sklearn
 from sklearn import linear_model
 from pyspark import SparkConf, SparkContext
-from util.data import getMnist
+from util.data import getMnist, getDatasetMinist
 from distributed.pysparkTry import getLogger
 from pyspark.sql.functions import udf
 from pyspark.ml.param import Param, Params
 from pyspark.ml.linalg import Vectors, Matrices, MatrixUDT
+from pyspark.ml.regression import GBTRegressor
+
 from spark_sklearn.util import createLocalSparkSession
+
 
 class Base():
     def _fit(self, x):
@@ -215,6 +218,8 @@ def udfTest():
     ufun = udf(sklmodelPredict(model))
 
     df.withColumn("pred", ufun("features")).show()
+
+
 
 
 if __name__ == '__main__':

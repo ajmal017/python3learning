@@ -54,6 +54,8 @@ def parallelFunc(model, maxGlobalStep,
 
                 inits, globalStep = model.build(graph, isChief)
 
+                uninitedOp = tf.report_uninitialized_variables()
+
             queues = createDoneQueues(cluster)
             enqueueOps = [q.enqueue(1) for q in queues]
 
@@ -73,6 +75,12 @@ def parallelFunc(model, maxGlobalStep,
                                                 config=sess_config) as sess:
 
                 logger.info("worker %d: is initialized, start working" % index)
+                # wait for parameter server variables to be initialized
+                uniVarList = sess.run(uninitedOp)
+                while (len(uniVarList) > 0):
+                    logger.info("worker %d: ps uninitialized, sleeping" % index)
+                    time.sleep(1)
+                    uniVarList = sess.run(uninitedOp)
 
                 if not isPredict:
                     # fit model
@@ -88,7 +96,7 @@ def parallelFunc(model, maxGlobalStep,
                         step = sess.run(globalStep)
                     graph_def = graph.as_graph_def()
 
-                    names = [n.name for n in graph_def.node if n.op == "VariableV2" or n.op == "Placeholder"]
+                    names = [n.name for n in graph_def.node if n.op in ["Variable", "VariableV2", "AutoReloadVariable"]]
 
                     output_graph_def = graph_util.convert_variables_to_constants(sess, graph_def, names)
                     bytes = output_graph_def.SerializeToString()
@@ -120,6 +128,13 @@ def parallelFunc(model, maxGlobalStep,
                 sess.run(queue.dequeue())
         logger.info("end server %s" % index)
 
+    def runPsSyn(index, logger):
+        jobName = 'ps'
+        cluster, server = getClusterAndServer(jobName, index)
+
+        logger.info("start server %s" % index)
+        server.join()
+        logger.info("end server %s" % index)
 
     def f(iter):
         logger = getlogger()
@@ -217,6 +232,7 @@ class HasPartitions(Params):
         Gets the value of partitions or its default value.
         """
         return self.getOrDefault(self.partitions)
+
 
 class TFNeuralNetwork(TFClassifier, HasFeaturesCol, HasLabelCol, HasProbabilityCol, HasRawPredictionCol,
                         HasLr, HasMaxIter, HasPartitions):
@@ -370,6 +386,7 @@ class TFNeuralNetworkSimple():
         self.labelSize = labelSize
         self.lr = lr
         self.maxIter = maxIter
+        self.partitions = partitions
         self.exmg = metaAndBytes[0] if metaAndBytes is not None else None
         self.bytes = metaAndBytes[1] if metaAndBytes is not None else None
 
@@ -395,8 +412,11 @@ class TFNeuralNetworkSimple():
 
             self.onehotlabel = tf.one_hot(self.label, self.labelSize, name="onehotlabel")
             self.pred, self.loss, self.globalStep, self.opt = lrmodel(self.input, self.onehotlabel)
-            self.trainOp = tf.train.AdamOptimizer(self.learningRate).minimize(self.loss, global_step=self.globalStep, name="trainOp")
 
+            self.opt = tf.train.SyncReplicasOptimizer(self.opt, replicas_to_aggregate=self.partitions,
+                                                 total_num_replicas=self.partitions, name="opt2")
+
+            self.trainOp = tf.train.AdamOptimizer(self.learningRate).minimize(self.loss, global_step=self.globalStep, name="trainOp")
             self.inits = tf.global_variables_initializer()
 
     def recoverGraph(self, graph):

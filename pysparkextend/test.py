@@ -1,6 +1,6 @@
 
 from spark_sklearn.util import createLocalSparkSession
-from pysparkextend.tfmodel import TFLogisticRegression
+from pysparkextend.tfmodel import TFNeuralNetwork
 from pyspark.ml.tuning import ParamGridBuilder, TrainValidationSplit
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
@@ -12,8 +12,8 @@ def testLr():
     df = getDatasetMinist(spark)
     train, test = df.randomSplit([0.9, 0.1], seed=12345)
 
-    lr = TFLogisticRegression()
-    model = lr.fit(train, {0.01:0.1, 10:20})
+    lr = TFNeuralNetwork()
+    model = lr.fit(train, {0.01:0.01, 10:10})
     pred = model.transform(test)
     pred.show()
 
@@ -22,7 +22,7 @@ def testCvWithLr():
     df = getDatasetMinist(spark)
     train, test = df.randomSplit([0.9, 0.1], seed=12345)
 
-    lr = TFLogisticRegression()
+    lr = TFNeuralNetwork()
     paramGrid = ParamGridBuilder() \
         .addGrid(lr.lr, [0.1, 0.01]) \
         .addGrid(lr.maxIter, [10]) \
@@ -40,4 +40,4 @@ def testCvWithLr():
 
 
 if __name__ == '__main__':
-    testCvWithLr()
+    testLr()
